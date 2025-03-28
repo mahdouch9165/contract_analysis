@@ -1,0 +1,4 @@
+- account
+- scanner
+- scanner/get_contract_code
+- fix scanner tests for names

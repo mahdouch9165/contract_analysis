@@ -1,0 +1,4 @@
+ollama
+openai
+python-dotenv
+copydetect
