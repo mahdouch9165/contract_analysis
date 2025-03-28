@@ -31,23 +31,14 @@ class ContractAnalysisDashboard:
         
     def load_data(self):
         """Load data from both pickle and JSON sources"""
+        self.pickle_state = None
+        self.json_data = None
+
         self._load_pickle_data()
         self._load_json_data()
         
-        # Determine the best data source to use
-        if self.pickle_state and 'families' in self.pickle_state:
-            self.families = self.pickle_state['families']
-            self.family_map = self.pickle_state.get('family_map', {})
-            self.graph = self.pickle_state.get('graph', {})
-            
-            # If family_map doesn't exist (older state files), create it
-            if not self.family_map and self.families:
-                self.family_map = {family.id: family for family in self.families}
-                
-            print("Using data from pickle state file")
-            print(f"Loaded {len(self.families)} families and graph with {len(self.graph)} entries")
-            return True
-        elif self.json_data and 'families' in self.json_data:
+        
+        if self.json_data and 'families' in self.json_data:
             # Try to reconstruct families from JSON
             reconstructed = self._reconstruct_families()
             if reconstructed:
@@ -59,6 +50,19 @@ class ContractAnalysisDashboard:
                     self.graph = self.json_data['graph']
                 print("Using reconstructed families from JSON data")
                 return True
+        # Determine the best data source to use
+        elif self.pickle_state and 'families' in self.pickle_state:
+            self.families = self.pickle_state['families']
+            self.family_map = self.pickle_state.get('family_map', {})
+            self.graph = self.pickle_state.get('graph', {})
+            
+            # If family_map doesn't exist (older state files), create it
+            if not self.family_map and self.families:
+                self.family_map = {family.id: family for family in self.families}
+                
+            print("Using data from pickle state file")
+            print(f"Loaded {len(self.families)} families and graph with {len(self.graph)} entries")
+            return True
                 
         print("No valid data found")
         return False
