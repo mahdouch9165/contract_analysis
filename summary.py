@@ -306,6 +306,13 @@ data_processor = ContractAnalysisDashboard()
 app.layout = html.Div([
     html.H1("Contract Analysis Dashboard", style={"textAlign": "center"}),
     
+    # Add auto-refresh interval component
+    dcc.Interval(
+        id='auto-refresh',
+        interval=5000,  # in milliseconds (5 seconds)
+        n_intervals=0
+    ),
+    
     # Data loading message
     html.Div(id="loading-message", children=[
         html.H3("Loading data...", style={"textAlign": "center", "color": "#888"})
@@ -313,62 +320,43 @@ app.layout = html.Div([
     
     # Main dashboard content (hidden until data loads)
     html.Div(id="dashboard-content", style={"display": "none"}, children=[
-        # Summary stats cards
-        html.Div(className="stats-container", children=[
-            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
-                html.H3("Total Families", style=custom_styles['stat_card_title']),
-                html.H2(id="total-families", style=custom_styles['stat_card_value'])
-            ]),
-            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
-                html.H3("Total Contracts", style=custom_styles['stat_card_title']),
-                html.H2(id="total-contracts", style=custom_styles['stat_card_value'])
-            ]),
-            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
-                html.H3("Unique Names", style=custom_styles['stat_card_title']),
-                html.H2(id="unique-names", style=custom_styles['stat_card_value'])
-            ]),
-            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
-                html.H3("Avg. Contracts/Family", style=custom_styles['stat_card_title']),
-                html.H2(id="avg-contracts", style=custom_styles['stat_card_value'])
-            ])
-        ], style={"display": "flex", "justifyContent": "space-between", "margin": "20px 0"}),
-        
-        # First row of visualizations
-        html.Div(className="row", style=custom_styles['row'], children=[
-            # Family size distribution
-            html.Div(className="six columns", children=[
-                html.H3("Family Size Distribution"),
-                dcc.Graph(id="family-size-chart")
-            ]),
-            
-            # Top contract names
-            html.Div(className="six columns", children=[
-                html.H3("Top Contract Names"),
-                dcc.Graph(id="name-frequency-chart")
-            ])
-        ]),
-        
-        # Network visualization
+        # Network visualization MOVED TO TOP
         html.Div(className="row", style=custom_styles['row'], children=[
             html.H3("Contract Family Network"),
-            html.Div(style={"marginBottom": "10px"}, children=[
-                html.Label("Layout:"),
-                dcc.Dropdown(
-                    id="cytoscape-layout",
-                    options=[
-                        {"label": "Concentric", "value": "concentric"},
-                        {"label": "Breadthfirst", "value": "breadthfirst"},
-                        {"label": "Circle", "value": "circle"},
-                        {"label": "Grid", "value": "grid"},
-                        {"label": "Force-directed", "value": "cose"}
-                    ],
-                    value="concentric",
-                    style={"width": "200px"}
-                )
+            html.Div(style={"display": "flex", "justifyContent": "space-between", "marginBottom": "10px"}, children=[
+                html.Div(style={"display": "flex", "alignItems": "center"}, children=[
+                    html.Label("Layout:", style={"marginRight": "10px"}),
+                    dcc.Dropdown(
+                        id="cytoscape-layout",
+                        options=[
+                            {"label": "Concentric", "value": "concentric"},
+                            {"label": "Breadthfirst", "value": "breadthfirst"},
+                            {"label": "Circle", "value": "circle"},
+                            {"label": "Grid", "value": "grid"},
+                            {"label": "Force-directed", "value": "cose"}
+                        ],
+                        value="concentric",
+                        style={"width": "200px"}
+                    )
+                ]),
+                html.Div(style={"display": "flex", "alignItems": "center"}, children=[
+                    html.Label("Node Spacing:", style={"marginRight": "10px"}),
+                    html.Div(style={"width": "300px"}, children=[
+                        dcc.Slider(
+                            id="node-spacing-slider",
+                            min=50,
+                            max=200,
+                            step=10,
+                            value=100,
+                            marks={50: '50%', 100: '100%', 150: '150%', 200: '200%'},
+                            tooltip={"placement": "bottom", "always_visible": True}
+                        )
+                    ])
+                ])
             ]),
             cyto.Cytoscape(
                 id="family-network",
-                layout={"name": "concentric", "animate": True},
+                layout={"name": "concentric", "animate": True, "spacingFactor": 1.0},
                 style={"width": "100%", "height": "600px", "border": "1px solid #ccc"},
                 elements=[],
                 stylesheet=[
@@ -418,6 +406,41 @@ app.layout = html.Div([
             html.Div(id="node-details", style={"margin": "15px 0", "padding": "10px", "border": "1px solid #ddd"})
         ]),
         
+        # Summary stats cards
+        html.Div(className="stats-container", children=[
+            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
+                html.H3("Total Families", style=custom_styles['stat_card_title']),
+                html.H2(id="total-families", style=custom_styles['stat_card_value'])
+            ]),
+            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
+                html.H3("Total Contracts", style=custom_styles['stat_card_title']),
+                html.H2(id="total-contracts", style=custom_styles['stat_card_value'])
+            ]),
+            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
+                html.H3("Unique Names", style=custom_styles['stat_card_title']),
+                html.H2(id="unique-names", style=custom_styles['stat_card_value'])
+            ]),
+            html.Div(className="stat-card", style=custom_styles['stat_card'], children=[
+                html.H3("Avg. Contracts/Family", style=custom_styles['stat_card_title']),
+                html.H2(id="avg-contracts", style=custom_styles['stat_card_value'])
+            ])
+        ], style={"display": "flex", "justifyContent": "space-between", "margin": "20px 0"}),
+        
+        # First row of visualizations
+        html.Div(className="row", style=custom_styles['row'], children=[
+            # Family size distribution
+            html.Div(className="six columns", children=[
+                html.H3("Family Size Distribution"),
+                dcc.Graph(id="family-size-chart")
+            ]),
+            
+            # Top contract names
+            html.Div(className="six columns", children=[
+                html.H3("Top Contract Names"),
+                dcc.Graph(id="name-frequency-chart")
+            ])
+        ]),
+        
         # Top families table
         html.Div(className="row", style=custom_styles['row'], children=[
             html.H3("Top Contract Families"),
@@ -464,9 +487,10 @@ app.layout = html.Div([
      Output("name-frequency-chart", "figure"),
      Output("top-families-table", "data"),
      Output("family-network", "elements")],
-    [Input("dashboard-content", "id")]
+    [Input("dashboard-content", "id"),
+     Input("auto-refresh", "n_intervals")]  # Add auto-refresh trigger
 )
-def load_dashboard_data(_):
+def load_dashboard_data(_, n_intervals):
     """Load data and update initial dashboard components"""
     # Load the data
     success = data_processor.load_data()
@@ -525,11 +549,19 @@ def load_dashboard_data(_):
 
 @app.callback(
     Output("family-network", "layout"),
-    [Input("cytoscape-layout", "value")]
+    [Input("cytoscape-layout", "value"),
+     Input("node-spacing-slider", "value")]
 )
-def update_network_layout(layout):
+def update_network_layout(layout, spacing):
     """Update the network layout"""
-    return {"name": layout, "animate": True}
+    # Convert spacing slider value to a spacing factor (50-200% → 0.5-2.0)
+    spacing_factor = spacing / 100
+    
+    return {
+        "name": layout, 
+        "animate": True,
+        "spacingFactor": spacing_factor
+    }
 
 @app.callback(
     Output("node-details", "children"),
