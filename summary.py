@@ -26,7 +26,8 @@ class ContractAnalysisDashboard:
         self.pickle_state = None
         self.json_data = None
         self.families = []
-        self.graph = {}
+        self.family_map = {}  # Maps family ID to family object
+        self.graph = {}  # Now using family.id as keys
         
     def load_data(self):
         """Load data from both pickle and JSON sources"""
@@ -36,7 +37,13 @@ class ContractAnalysisDashboard:
         # Determine the best data source to use
         if self.pickle_state and 'families' in self.pickle_state:
             self.families = self.pickle_state['families']
+            self.family_map = self.pickle_state.get('family_map', {})
             self.graph = self.pickle_state.get('graph', {})
+            
+            # If family_map doesn't exist (older state files), create it
+            if not self.family_map and self.families:
+                self.family_map = {family.id: family for family in self.families}
+                
             print("Using data from pickle state file")
             print(f"Loaded {len(self.families)} families and graph with {len(self.graph)} entries")
             return True
@@ -45,6 +52,11 @@ class ContractAnalysisDashboard:
             reconstructed = self._reconstruct_families()
             if reconstructed:
                 self.families = reconstructed
+                # Create family_map from reconstructed families
+                self.family_map = {family.id: family for family in self.families}
+                # Load graph data if available in JSON
+                if 'graph' in self.json_data:
+                    self.graph = self.json_data['graph']
                 print("Using reconstructed families from JSON data")
                 return True
                 
@@ -151,7 +163,7 @@ class ContractAnalysisDashboard:
         return top_names
     
     def get_network_data(self):
-        """Generate network data for cytoscape visualization"""
+        """Generate network data for cytoscape visualization using family IDs"""
         if not self.families:
             print("No families found for network visualization")
             return [], []
@@ -159,8 +171,8 @@ class ContractAnalysisDashboard:
         nodes = []
         edges = []
         
-        # Create nodes for each family
-        for i, family in enumerate(self.families):
+        # Create nodes for each family (using family ID as the node ID)
+        for family in self.families:
             # Get a representative name for the family
             names = list(family.names)
             if names:
@@ -168,7 +180,7 @@ class ContractAnalysisDashboard:
                 if len(name) > 15:
                     name = name[:12] + "..."
             else:
-                name = f"Family {i+1}"
+                name = f"Family {family.id[:8]}"
                 
             # Determine node size based on contract count
             size = max(20, min(100, 20 + family.count * 5))
@@ -176,7 +188,7 @@ class ContractAnalysisDashboard:
             # Create node
             nodes.append({
                 'data': {
-                    'id': str(i),
+                    'id': family.id,  # Use family.id instead of index
                     'label': name,
                     'size': size,
                     'contract_count': family.count,
@@ -192,42 +204,30 @@ class ContractAnalysisDashboard:
             # Create some mock edges for the largest families
             top_families = sorted(self.families, key=lambda f: f.count, reverse=True)[:10]
             for i, fam1 in enumerate(top_families):
-                idx1 = self.families.index(fam1)
                 for j, fam2 in enumerate(top_families):
                     if i >= j:
                         continue
-                    idx2 = self.families.index(fam2)
                     # Create mock similarity (70-99%)
                     mock_similarity = 70 + (i * j) % 30
                     edges.append({
                         'data': {
-                            'source': str(idx1),
-                            'target': str(idx2),
+                            'source': fam1.id,
+                            'target': fam2.id,
                             'weight': mock_similarity,
                             'label': f"{mock_similarity:.1f}% (mock)"
                         }
                     })
         else:
-            # Create edges for family similarities
+            # Create edges from the graph data
             edge_count = 0
-            for i, family1 in enumerate(self.families):
-                for j, family2 in enumerate(self.families):
-                    if i >= j:  # Only process each pair once
-                        continue
-                        
-                    # Calculate similarity
-                    similarity = 0
-                    if family1 in self.graph and family2 in self.graph[family1]:
-                        similarity = self.graph[family1][family2]
-                    elif family2 in self.graph and family1 in self.graph[family2]:
-                        similarity = self.graph[family2][family1]
-                    
-                    # Add edge if similarity exists (no threshold filtering)
+            for family_id, similarities in self.graph.items():
+                for other_id, similarity in similarities.items():
+                    # Add edge if similarity exists
                     if similarity > 0:
                         edges.append({
                             'data': {
-                                'source': str(i),
-                                'target': str(j),
+                                'source': family_id,
+                                'target': other_id,
                                 'weight': similarity,
                                 'label': f"{similarity:.1f}%"
                             }

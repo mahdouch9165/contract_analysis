@@ -2,6 +2,7 @@ import json
 import redis
 import os
 import pickle
+import uuid
 from src.modules.w3.chains.scanner.base_scanner import BaseScanner
 from datetime import datetime
 import time
@@ -29,6 +30,7 @@ class Contract:
 
 class ContractFamily:
     def __init__(self, contract):
+        self.id = str(uuid.uuid4())  # Add a unique identifier
         self.code = contract.code
         self.count = 1
         self.addresses = [contract.address]
@@ -41,6 +43,7 @@ class ContractFamily:
     
     def to_dict(self):
         return {
+            'id': self.id,
             'code': self.code,
             'count': self.count,
             'addresses': self.addresses,
@@ -58,6 +61,7 @@ class ContractFamily:
         family = cls(dummy_contract)
         
         # Update with actual data
+        family.id = data.get('id', str(uuid.uuid4()))  # Use existing ID or create new one
         family.count = data['count']
         family.addresses = data['addresses']
         family.names = set(data['names'])
@@ -112,7 +116,7 @@ class ContractFamily:
 
     def is_similar(self, contract, threshold=100):
         similarity = self.code_similarity(self.code, contract.code)
-        conclusion = similarity >= threshold
+        conclusion = similarity >= threshold  # Changed from > to >=
         return similarity, conclusion
 
 class ContractAnalysis:
@@ -125,7 +129,8 @@ class ContractAnalysis:
         from collections import defaultdict
         self.scanner = scanner
         self.families = []
-        self.graph = defaultdict(lambda: defaultdict(float))
+        self.family_map = {}  # Map family.id to family object
+        self.graph = defaultdict(lambda: defaultdict(float))  # Now using family.id as key
         self.last_save_time = time.time()
         self.save_interval = 300  # 5 minutes
         self.setup_data_directory()
@@ -153,6 +158,9 @@ class ContractAnalysis:
             return
         #2. get the code of the token
         code, name = self.scanner.get_contract_source_code_and_name(address)
+
+        if len(code) == 0:
+            return
         
         #3 create a contract
         contract = Contract(address, code, name)
@@ -165,16 +173,17 @@ class ContractAnalysis:
                 family.add_contract(contract)
                 self.check_save_state()
                 return
-            observations[family] = similarity
+            observations[family.id] = similarity  # Store by ID instead of object
             
         # if no family is found, create a new one
         family = ContractFamily(contract)
         self.families.append(family)
-
+        self.family_map[family.id] = family  # Add to id->family mapping
+        
         # update graph with observations
-        for other, similarity in observations.items():
-            self.graph[family][other] = similarity
-            self.graph[other][family] = similarity
+        for other_id, similarity in observations.items():
+            self.graph[family.id][other_id] = similarity
+            self.graph[other_id][family.id] = similarity
             
         # Save state periodically
         self.check_save_state()
@@ -192,11 +201,20 @@ class ContractAnalysis:
     def save_state(self):
         """Save the current state to a file"""
         try:
+            # Build the family_map to ensure all families are mapped
+            self.family_map = {family.id: family for family in self.families}
+            
+            # Convert graph to use IDs only
+            graph_dict = {}
+            for family_id, similarities in self.graph.items():
+                graph_dict[family_id] = dict(similarities)
+            
             state_path = os.path.join(self.DATA_DIR, self.STATE_FILE)
             with open(state_path, 'wb') as f:
                 pickle.dump({
                     'families': self.families,
-                    'graph': dict(self.graph),
+                    'family_map': self.family_map,
+                    'graph': graph_dict,
                     'timestamp': datetime.now().isoformat()
                 }, f)
             print(f"State saved at {datetime.now().isoformat()}")
@@ -211,15 +229,21 @@ class ContractAnalysis:
                 with open(state_path, 'rb') as f:
                     state = pickle.load(f)
                     self.families = state.get('families', [])
+                    self.family_map = state.get('family_map', {})
+                    
+                    # If family_map doesn't exist (older state files), create it
+                    if not self.family_map:
+                        self.family_map = {family.id: family for family in self.families}
                     
                     # Convert graph back to defaultdict
                     graph_dict = state.get('graph', {})
-                    for k, v in graph_dict.items():
-                        for k2, v2 in v.items():
-                            self.graph[k][k2] = v2
+                    for family_id, similarities in graph_dict.items():
+                        for other_id, sim_val in similarities.items():
+                            self.graph[family_id][other_id] = sim_val
                     
                     timestamp = state.get('timestamp', 'unknown')
                     print(f"Loaded state from {timestamp}")
+                    print(f"Loaded {len(self.families)} families and {len(self.graph)} graph entries")
                     return True
             except Exception as e:
                 print(f"Error loading state: {e}")
@@ -229,9 +253,16 @@ class ContractAnalysis:
         """Export contract families in a JSON format for other scripts"""
         try:
             export_path = os.path.join(self.DATA_DIR, self.EXPORT_FILE)
+            
+            # Convert graph to a format suitable for JSON
+            graph_data = {}
+            for family_id, similarities in self.graph.items():
+                graph_data[family_id] = dict(similarities)
+            
             export_data = {
                 'timestamp': datetime.now().isoformat(),
                 'families': [family.to_dict() for family in self.families],
+                'graph': graph_data,
                 'stats': {
                     'total_families': len(self.families),
                     'total_contracts': sum(family.count for family in self.families)
