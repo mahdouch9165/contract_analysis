@@ -223,7 +223,7 @@ class ContractAnalysisDashboard:
             for family_id, similarities in self.graph.items():
                 for other_id, similarity in similarities.items():
                     # Add edge if similarity exists
-                    if similarity > 0:
+                    if similarity >= 0:
                         edges.append({
                             'data': {
                                 'source': family_id,
