@@ -356,6 +356,16 @@ app.layout = html.Div([
                             tooltip={"placement": "bottom", "always_visible": True}
                         )
                     ])
+                ]),
+                html.Div(style={"display": "flex", "alignItems": "center"}, children=[
+                    dcc.Checklist(
+                        id="family-size-filter",
+                        options=[
+                            {"label": "Show only multi-contract families", "value": "filter"}
+                        ],
+                        value=["filter"],  # Default to checked
+                        style={"marginRight": "10px"}
+                    )
                 ])
             ]),
             cyto.Cytoscape(
@@ -492,9 +502,10 @@ app.layout = html.Div([
      Output("top-families-table", "data"),
      Output("family-network", "elements")],
     [Input("dashboard-content", "id"),
-     Input("auto-refresh", "n_intervals")]  # Add auto-refresh trigger
+     Input("auto-refresh", "n_intervals"),
+     Input("family-size-filter", "value")]  # Add the filter input
 )
-def load_dashboard_data(_, n_intervals):
+def load_dashboard_data(_, n_intervals, size_filter):
     """Load data and update initial dashboard components"""
     # Load the data
     success = data_processor.load_data()
@@ -534,8 +545,9 @@ def load_dashboard_data(_, n_intervals):
     # Get top families data
     top_families = data_processor.get_top_families()
     
-    # Get network data
-    nodes, edges = data_processor.get_network_data()
+    # Get network data with size filter
+    filter_active = size_filter and "filter" in size_filter
+    nodes, edges = get_filtered_network_data(filter_active)
     
     # Show dashboard and hide loading message
     return (
@@ -550,6 +562,97 @@ def load_dashboard_data(_, n_intervals):
         top_families,
         nodes + edges  # Combine nodes and edges for the network
     )
+
+def get_filtered_network_data(filter_active):
+    """Get network data with optional filtering for family size > 1"""
+    families = data_processor.families
+    
+    # Apply filtering if needed
+    if filter_active:
+        # Only include families with more than one contract
+        families = [family for family in families if family.count > 1]
+    
+    nodes = []
+    edges = []
+    
+    # Create nodes for each family (using family ID as the node ID)
+    for family in families:
+        # Get a representative name for the family
+        names = list(family.names)
+        if names:
+            name = names[0]
+            if len(name) > 15:
+                name = name[:12] + "..."
+        else:
+            name = f"Family {family.id[:8]}"
+            
+        # Determine node size based on contract count
+        size = max(20, min(100, 20 + family.count * 5))
+        
+        # Create node
+        nodes.append({
+            'data': {
+                'id': family.id,
+                'label': name,
+                'size': size,
+                'contract_count': family.count,
+                'name_count': len(family.names),
+                'addresses': len(family.addresses),
+                'names': list(family.names)[:5],  # First 5 names for display
+            }
+        })
+    
+    # Create family ID map for filtered families
+    filtered_family_ids = {family.id for family in families}
+    
+    # Create a mock similarity if graph is empty
+    graph = data_processor.graph
+    if not graph:
+        print("WARNING: No similarity data found in graph. Creating mock similarities for visualization.")
+        # Create some mock edges for the largest families
+        top_families = sorted(families, key=lambda f: f.count, reverse=True)[:10]
+        for i, fam1 in enumerate(top_families):
+            for j, fam2 in enumerate(top_families):
+                if i >= j:
+                    continue
+                # Create mock similarity (70-99%)
+                mock_similarity = 70 + (i * j) % 30
+                edges.append({
+                    'data': {
+                        'source': fam1.id,
+                        'target': fam2.id,
+                        'weight': mock_similarity,
+                        'label': f"{mock_similarity:.1f}% (mock)"
+                    }
+                })
+    else:
+        # Create edges from the graph data, only for filtered families
+        edge_count = 0
+        for family_id, similarities in graph.items():
+            # Skip if source family is filtered out
+            if family_id not in filtered_family_ids:
+                continue
+                
+            for other_id, similarity in similarities.items():
+                # Skip if target family is filtered out
+                if other_id not in filtered_family_ids:
+                    continue
+                    
+                # Add edge if similarity exists
+                if similarity >= 0:
+                    edges.append({
+                        'data': {
+                            'source': family_id,
+                            'target': other_id,
+                            'weight': similarity,
+                            'label': f"{similarity:.1f}%"
+                        }
+                    })
+                    edge_count += 1
+        
+        print(f"Created {edge_count} edges for network visualization")
+    
+    return nodes, edges
 
 @app.callback(
     Output("family-network", "layout"),

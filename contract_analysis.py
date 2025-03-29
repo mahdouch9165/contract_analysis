@@ -2,6 +2,7 @@ import json
 import redis
 import os
 import pickle
+import numpy as np
 import uuid
 from src.modules.w3.chains.scanner.base_scanner import BaseScanner
 from datetime import datetime
@@ -69,50 +70,82 @@ class ContractFamily:
         return family
 
     @staticmethod
-    def code_similarity(code1, code2, chunk_size=30, window_size=4):
+    def code_similarity(code1, code2, chunk_size=30, window_size=4, ignore_comments=False):
         """
-        Returns a percentage indicating how similar the two code strings are,
+        Returns a percentage indicating how similar two Solidity code snippets are,
         using CopyDetect under the hood.
         
         Requirements:
             pip install copydetect
         
         Parameters:
-            code1 (str): First code snippet as a string.
-            code2 (str): Second code snippet as a string.
+            code1 (str): First Solidity code snippet as a string.
+            code2 (str): Second Solidity code snippet as a string.
             chunk_size (int): Number of tokens in each chunk for fingerprinting.
+                For Solidity, values between 20-40 work well for most contracts.
             window_size (int): Sliding window size for building winnowed fingerprints.
-
+                For Solidity, 3-5 is typically effective.
+            ignore_comments (bool): Whether to strip comments before comparison.
+        
         Returns:
             float: Highest similarity percentage between the two code snippets.
         """
         import tempfile
+        import os
+        import re
         import copydetect
-
-        # If either snippet is empty, similarity is 0
+        
+        # Input validation
         if not code1 or not code2:
             return 0.0
-
-        # Write each snippet to its own temp file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp1:
-            tmp1.write(code1.encode('utf-8'))
-            file1 = tmp1.name
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp2:
-            tmp2.write(code2.encode('utf-8'))
-            file2 = tmp2.name
-
-        # Build the fingerprints
-        fp1 = copydetect.CodeFingerprint(file1, chunk_size, window_size)
-        fp2 = copydetect.CodeFingerprint(file2, chunk_size, window_size)
-
-        # Compare them
-        token_overlap, similarities, slices = copydetect.compare_files(fp1, fp2)
         
-        # Return the highest similarity as a percentage
-        if similarities:
-            return round(max(similarities) * 100, 2)
-        return 0.0
+        # Remove comments if requested (handles both // and /* */ style comments)
+        if ignore_comments:
+            def remove_comments(code):
+                # Remove multi-line comments
+                code = re.sub(r'/\*[\s\S]*?\*/', '', code)
+                # Remove single-line comments
+                code = re.sub(r'//.*', '', code)
+                return code
+            
+            code1 = remove_comments(code1)
+            code2 = remove_comments(code2)
+        
+        temp_files = []
+        try:
+            # Write each snippet to its own temp file with .sol extension
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".sol") as tmp1:
+                tmp1.write(code1.encode('utf-8'))
+                file1 = tmp1.name
+                temp_files.append(file1)
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".sol") as tmp2:
+                tmp2.write(code2.encode('utf-8'))
+                file2 = tmp2.name
+                temp_files.append(file2)
+            
+            # Build the fingerprints
+            fp1 = copydetect.CodeFingerprint(file1, chunk_size, window_size)
+            fp2 = copydetect.CodeFingerprint(file2, chunk_size, window_size)
+            
+            # Compare them
+            token_overlap, similarities, slices = copydetect.compare_files(fp1, fp2)
+            
+            # Return the highest similarity as a percentage
+            if similarities:
+                return round(np.mean(similarities) * 100, 2)
+            return 0.0
+        
+        except Exception as e:
+            raise RuntimeError(f"Error comparing Solidity code: {str(e)}")
+        
+        finally:
+            # Clean up temporary files
+            for file in temp_files:
+                try:
+                    os.remove(file)
+                except:
+                    pass
 
     def is_similar(self, contract, threshold=100):
         similarity = self.code_similarity(self.code, contract.code)
