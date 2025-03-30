@@ -1,5 +1,8 @@
 # Detecting Blockchain Scams through Smart Contract Profiling - Part 1
 
+## Disclaimer
+None of this is financial advice, or cybersecurity advice. This is a technical exploration of a method for detecting scams on the blockchain. It does not cover all scams, and does not guarantee safety. Please be careful with your investments, and do your own research.
+
 ## Introduction
 A common observation about scam tokens on blockchain networks is that they often utilize identical or highly similar source code. This occurs for several reasons:
 
