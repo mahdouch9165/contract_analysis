@@ -3,6 +3,42 @@
 ## Disclaimer
 None of this is financial advice, or cybersecurity advice. This is a technical exploration of a method for detecting scams on the blockchain. It does not cover all scams, and does not guarantee safety. Please be careful with your investments, and do your own research.
 
+## Usage
+In order to run the code, run the following command:
+
+### Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### Set Credentials
+Create a `.env` file in the root directory and set the following variables:
+
+```bash
+BASE_SCAN_API_KEY=your_base_scan_api_key
+```
+
+I used BaseScan for this project, feel free to modify the code to use different chains and scanners.
+
+### Run the Code
+1. Run redis-server
+```bash
+redis-server
+```
+2. Run the event fetcher to collect data
+```bash
+python event_fetcher.py
+```
+3. Run contract_analysis.py to process the queue and build the graph
+```bash
+python contract_analysis.py
+```
+
+4. Run the visualization
+```bash
+python summary.py
+```
+
 ## Introduction
 A common observation about scam tokens on blockchain networks is that they often utilize identical or highly similar source code. This occurs for several reasons:
 
