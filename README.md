@@ -1,25 +1,27 @@
 # Profiling Contracts on the Blockchain - Part 1
 # Introduction
-One thing I noticed about scam coins on the blockchain, is that often times, the coins released have very similar if not the same source code. This can be due to a variety of reasons:
+A notable observation regarding scam tokens on blockchain networks is that they often utilize identical or highly similar source code. This can be due to a variety of reasons:
 
-- Laziness: Scammers found something that works and is stable and there is no need to change it.
-- Lack of Knowledge: The malicious code is acquired by a non-technical scammer who simply does not know how to find vulnerabilities and they stick to the recipe.
+- Convenience: Scammers re-use stable, proven malicious code without modification.
+- Limited Technical Knowledge: Non-technical scammers rely on pre-existing malicious templates due to their lack of expertise in coding vulnerabilities.
 
-Regardless of the reasons, we have a very important implication of this observation. The same vulnerabilities are being re-used, and therefore we can protect against them, if we profile them correctly. My goal with this article is to explore a very naive first approach, and possibly set the foundation for more advanced exploration in the future.
+The implication is clear: repeated vulnerabilities can be systematically identified and mitigated through accurate code profiling. This articles explores a naive approach to profiling smart contract code, aiming to build a foundation for more sophisticated future exploration.
 
-# The Approach
-The algorithm is simple:
-1. Observe a new token and its code
-2. Use a pre-defined distance metric and threshold to assess its similarity to other codes
-3. If two codes are similar, they merge into a "code family"
-4. Look at the most frequent code families and see if they are malicious
+# Methodology
+The approach is as follows:
 
-The benefits of this approach include reducing the amount of pairwise computations that need to be done. If two codes are similar, or if a grouping of codes is similar, then it is practical to use one representative code for comparison on behalf of the group. 
+1. Monitor tokens (smart contracts) deployments on the blockchain
+2. Extract smart contract code for each observed token
+3. Use a distance metric to assess code similarity
+4. Similar codes are merged into a "code family"
+5. Analyze the most frequent code families for malicious patterns
 
-## Distance Function and Threshold:
-In my first iteration I will use the distance function below, leveraging the copydetect library, which is (insert something here). For my threshold, I am starting with a strict 100% similarity threshold, as I want to see the amount of code that is exactly duplicated.
+One advantage of this approach is that the merging step reduces the amount of pairwise comparisons needed. Contracts within a family can be represented by a single instance for subsequent computations.
 
-'''
+## Distance Function and Threshold
+In my first iteration I will use the distance function below, leveraging the copydetect library, a plagiarism detection tool for code similarity. For my threshold, I am starting with a strict 100% similarity threshold, as I am currenlty only interested in exact duplicates.
+
+```python
 def code_similarity(code1, code2, chunk_size=30, window_size=4, ignore_comments=False):
     import tempfile
     import os
@@ -78,16 +80,25 @@ def code_similarity(code1, code2, chunk_size=30, window_size=4, ignore_comments=
                 os.remove(file)
             except:
                 pass
-'''
+```
 
-### Possible Improvement:
-Use of embeddings to detect similarity between code. This would give use the option of introducing neural networks to model code behavior in a more powerful way, and we are no longer limited to P(scam|code family), but P(scam|embedding). Code similarity can provide weights to a neighboring embedding, and we can use this to train a neural network to predict behavior of unseen code.
+## Potential Improvements
+### Distance Metric
+A more robust future improvement involves using embeddings to quantify code similarity. Currently, we cannot determine the probability of a scam for an unseen code, we can only do so for code belonging to established families. 
 
-## Computational Decisions
-One crucial decision in the long term but a more optional one in the short term, is the purging of data. The amount of computations needed for this algorithm grows quadratically, and though the merging of code helps, if a strict threshold is set, it does not offset the growth of computations much. Therefore, considering a purging step to remove single instance code would be helpful.
+$$ P(scam|code) = \sum_{f \in families} (P(scam|f) \cdot 1 \text{ if } code \in f)$$
+
+Embeddings would enable us to determine the probability of a scam for an unseen code, using what we have already observed. One way to do this is by using a weighted average, for example:
+
+$$P(scam|embedding) = \frac{\sum_{f \in families} P(scam|f) \cdot \max(0, cosine(f, embedding))}{\sum_{f \in families} \max(0, cosine(f, embedding))}$$
+
+Other approaches could be to use a neural network to predict the probability of a scam for an unseen code.
+
+### Computational Efficiency
+A critical scalability factor involves handling computational complexity, which grows quadratically with the number of contracts. While grouping similar code mitigates some computational strain, a strict similarity threshold reduces the effectiveness of this strategy. Introducing periodic data purging, especially for unique or infrequent code instances, could significantly enhance computational efficiency.
 
 # Architecture
-I also opted to go for a simple architecture in this case:
+The architecture for the implemenation is as follows:
 
 ![Architecture](images/architecture.png)
 
@@ -169,7 +180,7 @@ function permitAllance(address owner, address spender, uint256 value) public vir
 This is a different vulnerability, and allows the contract creator to set allowances for any user's tokens without their permission, effectively granting themselves unlimited access to transfer their tokens back to their own account.
 
 # Conclusion
-Though not the most optimal and most sophisticated approach, this was a good starting point to explore the contract landscape of scam coins. We were able to spot some interesting patterns, and some malicious vulnerabilities, raising awareness about the importance of contract analysis in the blockchain space.
+This preliminary investigation successfully demonstrates the feasibility of profiling smart contract code to identify malicious contracts. We were able to spot some interesting patterns, and some code vulnerabilities, raising awareness about the importance of contract analysis in the blockchain space.
 
 # Future Work
 - Implement a more sophisticated approach to contract analysis, such as using embeddings to detect similarity between code.
