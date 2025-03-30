@@ -167,7 +167,7 @@ I personally found this dense graph fascinating, as it starting showcase the lan
 
 ![Code Families](images/dense.png)
 
-## Closer Look: sWETH
+## Closer Look: sWETH ([BaseScan Link](https://basescan.org/address/0x3d8b56985f5a85d44A9fb576C563c9486B400E6a#code), [Exchange Link](https://www.dextools.io/app/en/base/pair-explorer/0x0a3f5a2c27253cd3dcb51fdc3d136813068b9b17))
 The following code snippet from the 'sWETH' contract, mass deployed on-chain, reveals a significant vulnerability:
 
 ```solidity
@@ -191,7 +191,7 @@ function swap() external {
 ```
 This sets the balance of token holders to 0 unless whitelisted, effectively trapping buyers as they are unable to sell their tokens.
 
-## Closer Look: Token
+## Closer Look: Token ([BaseScan Link](https://basescan.org/address/0xc754b1a140971baD47c0D2A433e5963642F8aE3e#code), [Exchange Link](https://www.dextools.io/app/en/base/pair-explorer/0x5ef564026a630ebb3b2de2b78c62b0da4e17af94))
 The following code snippet from the 'Token' contract demonstrates another vulnerability:
 
 ```solidity
@@ -213,4 +213,3 @@ This preliminary investigation successfully demonstrates that profiling smart co
 - Utilize embeddings for sophisticated similarity detection.
 - Explore neural network models for predicting unseen code behaviors.
 - Improve computational efficiency by implementing multiple concurrent processing workers, and purging data that is not observed for a long period of time.
-
